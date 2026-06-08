@@ -10,3 +10,5 @@ coverage
 .turbo
 uploads
 tmp
+
+.vercel
