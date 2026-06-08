@@ -1,0 +1,264 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  STUDENT
+  TEACHER
+  SCHOOL_ADMIN
+  ADMIN
+}
+
+enum PaperType {
+  QUESTION_PAPER
+  MARK_SCHEME
+  EXAMINER_REPORT
+  NOTES
+  TOPIC_QUESTIONS
+}
+
+enum ProcessingStatus {
+  QUEUED
+  PROCESSING
+  NEEDS_REVIEW
+  PUBLISHED
+  FAILED
+}
+
+model User {
+  id                String             @id @default(uuid()) @db.Uuid
+  email             String             @unique
+  name              String?
+  role              UserRole           @default(STUDENT)
+  country           String?
+  curriculum        String?
+  createdAt         DateTime           @default(now())
+  subscriptions     Subscription[]
+  payments          Payment[]
+  conversations     AiConversation[]
+  revisionSessions  RevisionSession[]
+  topicMastery      UserTopicMastery[]
+}
+
+model ExamBoard {
+  id             String          @id @default(uuid()) @db.Uuid
+  name           String
+  slug           String          @unique
+  qualifications Qualification[]
+}
+
+model Qualification {
+  id        String    @id @default(uuid()) @db.Uuid
+  boardId   String    @db.Uuid
+  board     ExamBoard @relation(fields: [boardId], references: [id])
+  name      String
+  level     String
+  subjects  Subject[]
+}
+
+model Subject {
+  id              String             @id @default(uuid()) @db.Uuid
+  qualificationId String             @db.Uuid
+  qualification   Qualification      @relation(fields: [qualificationId], references: [id])
+  name            String
+  syllabusCode    String?
+  slug            String
+  papers          Paper[]
+  topics          TopicTag[]
+  chunks          ContentChunk[]
+  predictions     Prediction[]
+  conversations   AiConversation[]
+  revisionSessions RevisionSession[]
+
+  @@unique([qualificationId, syllabusCode])
+  @@index([slug])
+}
+
+model TopicTag {
+  id              String             @id @default(uuid()) @db.Uuid
+  subjectId       String             @db.Uuid
+  subject         Subject            @relation(fields: [subjectId], references: [id])
+  parentId        String?            @db.Uuid
+  parent          TopicTag?          @relation("TopicHierarchy", fields: [parentId], references: [id])
+  children        TopicTag[]         @relation("TopicHierarchy")
+  name            String
+  slug            String
+  questionTopics  QuestionTopic[]
+  chunks          ContentChunk[]
+  topicMastery    UserTopicMastery[]
+  revisionSessions RevisionSession[]
+
+  @@unique([subjectId, slug])
+  @@index([subjectId, parentId])
+}
+
+model Paper {
+  id          String           @id @default(uuid()) @db.Uuid
+  subjectId   String           @db.Uuid
+  subject     Subject          @relation(fields: [subjectId], references: [id])
+  title       String
+  year        Int
+  session     String?
+  paperCode   String?
+  variant     String?
+  paperType   PaperType
+  storageUrl  String
+  status      ProcessingStatus @default(QUEUED)
+  createdAt   DateTime         @default(now())
+  questions   Question[]
+  report      ExaminerReport?
+
+  @@index([subjectId, year])
+  @@index([paperType])
+  @@index([status])
+}
+
+model Question {
+  id             String          @id @default(uuid()) @db.Uuid
+  paperId        String          @db.Uuid
+  paper          Paper           @relation(fields: [paperId], references: [id])
+  questionNumber String?
+  rawText        String
+  pageStart      Int?
+  pageEnd        Int?
+  marks          Int?
+  difficulty     String?
+  topics         QuestionTopic[]
+  createdAt      DateTime        @default(now())
+
+  @@index([paperId])
+}
+
+model QuestionTopic {
+  questionId String   @db.Uuid
+  topicId    String   @db.Uuid
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  topic      TopicTag @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  confidence Decimal? @db.Decimal(5, 4)
+
+  @@id([questionId, topicId])
+}
+
+model ExaminerReport {
+  id              String @id @default(uuid()) @db.Uuid
+  paperId          String @unique @db.Uuid
+  paper            Paper  @relation(fields: [paperId], references: [id])
+  summary          String?
+  commonMistakes   Json?
+  highValueAdvice  Json?
+}
+
+model ContentChunk {
+  id          String   @id @default(uuid()) @db.Uuid
+  sourceType  String
+  sourceId    String   @db.Uuid
+  subjectId   String?  @db.Uuid
+  subject     Subject? @relation(fields: [subjectId], references: [id])
+  topicId     String?  @db.Uuid
+  topic       TopicTag? @relation(fields: [topicId], references: [id])
+  chunkText   String
+  embedding   Unsupported("vector(1536)")?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([sourceType, sourceId])
+  @@index([subjectId, topicId])
+}
+
+model AiConversation {
+  id        String      @id @default(uuid()) @db.Uuid
+  userId    String      @db.Uuid
+  user      User        @relation(fields: [userId], references: [id])
+  subjectId String?     @db.Uuid
+  subject   Subject?    @relation(fields: [subjectId], references: [id])
+  title     String?
+  messages  AiMessage[]
+  createdAt DateTime    @default(now())
+}
+
+model AiMessage {
+  id             String         @id @default(uuid()) @db.Uuid
+  conversationId String         @db.Uuid
+  conversation   AiConversation @relation(fields: [conversationId], references: [id])
+  role           String
+  content        String
+  citations      Json?
+  tokensUsed     Int?
+  createdAt      DateTime       @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model RevisionSession {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @db.Uuid
+  user            User      @relation(fields: [userId], references: [id])
+  subjectId       String    @db.Uuid
+  subject         Subject   @relation(fields: [subjectId], references: [id])
+  topicId         String?   @db.Uuid
+  topic           TopicTag? @relation(fields: [topicId], references: [id])
+  score           Decimal?  @db.Decimal(5, 2)
+  durationSeconds Int?
+  createdAt       DateTime  @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model UserTopicMastery {
+  userId          String   @db.Uuid
+  topicId         String   @db.Uuid
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic           TopicTag @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  masteryScore    Decimal  @default(0) @db.Decimal(5, 2)
+  attempts        Int      @default(0)
+  lastPracticedAt DateTime?
+
+  @@id([userId, topicId])
+  @@index([userId, masteryScore])
+}
+
+model Prediction {
+  id              String   @id @default(uuid()) @db.Uuid
+  subjectId       String   @db.Uuid
+  subject         Subject  @relation(fields: [subjectId], references: [id])
+  examSession     String
+  predictedTopics Json
+  methodology     String?
+  confidence      Decimal? @db.Decimal(5, 4)
+  createdAt       DateTime @default(now())
+
+  @@index([subjectId, examSession])
+}
+
+model Subscription {
+  id                 String   @id @default(uuid()) @db.Uuid
+  userId             String   @db.Uuid
+  user               User     @relation(fields: [userId], references: [id])
+  provider           String
+  providerCustomerId String?
+  status             String
+  plan               String
+  currentPeriodEnd   DateTime?
+
+  @@index([userId, status])
+}
+
+model Payment {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @db.Uuid
+  user              User     @relation(fields: [userId], references: [id])
+  provider          String
+  amountCents       Int
+  currency          String
+  status            String
+  providerReference String?
+  createdAt         DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([provider, providerReference])
+}

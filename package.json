@@ -1,0 +1,25 @@
+{
+  "name": "exam-ai-platform",
+  "private": true,
+  "version": "0.1.0",
+  "description": "AI-powered exam preparation platform for IGCSE, AS-Level, and A-Level students.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@exam-ai/web",
+    "dev:api": "npm run start:dev --workspace=@exam-ai/api",
+    "build": "npm run build --workspaces",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:generate": "npm run db:generate --workspace=@exam-ai/api",
+    "db:migrate": "npm run db:migrate --workspace=@exam-ai/api"
+  },
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "overrides": {
+    "postcss": "^8.5.10"
+  }
+}
