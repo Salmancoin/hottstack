@@ -1,4 +1,4 @@
-# Exam AI Platform
+# Hottstack
 
 Startup-grade MVP foundation for an AI-powered exam preparation platform serving Cambridge IGCSE, Cambridge International AS & A-Level, Pearson Edexcel, and OxfordAQA students.
 
